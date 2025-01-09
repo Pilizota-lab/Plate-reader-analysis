@@ -8,7 +8,16 @@ Added functionalities :
 - visualize multiple data files together (limited to group analysis)
 - Rename figure legend & change plot colours 
 
+# Requirements 
 
+Tested on python 3.11.4 & 3.11.9 on 64-bit windows
+
+Non-preinstalled packages 
+- Numpy
+- Seaborn
+- Matplotlib
+- Pandas
+  
 
 # Data visualisation GUI
 This script allows users to quickly plot and analyse raw data from plate reader experiments. File formats accepted are .csv and .xlsx (i.e., depending on the type of software used by your plate reader, you might need to export the data to one of these formats)
