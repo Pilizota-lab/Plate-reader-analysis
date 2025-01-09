@@ -1,3 +1,24 @@
+# Change-log for v2.0  
+Updated df.append (deprecated) function to the df.concat alternative 
+
+Small changes to GUI design
+
+Added functionalities : 
+- upload different data files without needing to relaunch the software
+- visualize multiple data files together (limited to group analysis)
+- Rename figure legend & change plot colours 
+
+# Requirements 
+
+Tested on python 3.11.4 & 3.11.9 on 64-bit windows
+
+Non-preinstalled packages 
+- Numpy
+- Seaborn
+- Matplotlib
+- Pandas
+  
+
 # Data visualisation GUI
 This script allows users to quickly plot and analyse raw data from plate reader experiments. File formats accepted are .csv and .xlsx (i.e., depending on the type of software used by your plate reader, you might need to export the data to one of these formats)
 The script can be run from the terminal or inside a code editor. The following steps are involved: <br>
