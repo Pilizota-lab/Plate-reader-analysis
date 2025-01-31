@@ -309,19 +309,20 @@ def plot_contents():
             dataset_condition_data = df[(df['content'] == condition) & (df['dataset'] == dataset)]
             df_mod_cond = pd.concat([df_mod_cond, dataset_condition_data], ignore_index=True)
             selected_conditions.append((condition, dataset))
-
+    df_mod_cond['condition_dataset'] = df_mod_cond['content'].astype(str) + ' (' + df_mod_cond['dataset'].astype(str) + ')'
     if not df_mod_cond.empty:
-        palette = {cond: color_vars[f'group_{i}']['color'] 
-                  for i, (cond, _) in enumerate(set((c, d) for c, d in selected_conditions))}
-        
+        palette = {f"{cond} ({dataset})": color_vars[f'group_{i}']['color'] 
+                for i, (cond, dataset) in enumerate(selected_conditions)}
         if indiv.get() == 1:
             for condition, dataset in set((c, d) for c, d in selected_conditions):
+# Filter data for specific condition and dataset
                 condition_data = df_mod_cond[
                     (df_mod_cond['content'] == condition) & 
                     (df_mod_cond['dataset'] == dataset)
                 ]
-                
-                base_color = np.array(mcolors.to_rgb(palette[condition]))
+
+                # Get base color for this condition-dataset combination
+                base_color = np.array(mcolors.to_rgb(palette[f"{condition} ({dataset})"]))
                 wells = condition_data['well'].unique()
                 
                 for i, well in enumerate(wells):
@@ -347,22 +348,22 @@ def plot_contents():
             if cond_log.get() == 1:
                 if ci_95.get() == 1:
                     sns.lineplot(data=df_mod_cond, x="time_h", y="lnOD", 
-                               hue="content", style="dataset", ci=95, ax=ax,
-                               palette=palette)
+                            hue="condition_dataset", ci=95, ax=ax,
+                            palette=palette)
                 else:
                     sns.lineplot(data=df_mod_cond, x="time_h", y="lnOD", 
-                               hue="content", style="dataset", ci=None, ax=ax,
-                               palette=palette)
+                            hue="condition_dataset", ci=None, ax=ax,
+                            palette=palette)
                 ax.set_ylabel("ln(OD)")
             else:
                 if ci_95.get() == 1:
                     sns.lineplot(data=df_mod_cond, x="time_h", y="OD", 
-                               hue="content", style="dataset", ci=95, ax=ax,
-                               palette=palette)
+                            hue="condition_dataset", ci=95, ax=ax,
+                            palette=palette)
                 else:
                     sns.lineplot(data=df_mod_cond, x="time_h", y="OD", 
-                               hue="content", style="dataset", ci=None, ax=ax,
-                               palette=palette)
+                            hue="condition_dataset", ci=None, ax=ax,
+                            palette=palette)
                 ax.set_ylabel("Optical Density")
 
         ax.set_xlabel("Time (h)")
