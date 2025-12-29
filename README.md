@@ -1,9 +1,9 @@
 # Introduction
 These user interfaces are designed to aid with post-processing of plate reader data for bacterial growth. We provide the following easy-to-use UIs:
 1. Data visualisation GUI - allows the user to quickly visualise and inspect raw data exported from plate reader softwares;
-2. Data plotting GUI - custom-made high-quality plots of growth data; also allows for collation of multiple curves across different dataset files;
-3. Growth rate estimator - allows the user to compute growth rates of exponentially growing cells.
-4. Fluorescence analysis GUI - allows the user to normalise fluorescence data w.r.t. the OD, and, optionally, to subtract autofluorescence (provided that a control is included in the experiment)
+2. Data plotting GUI (experimental) - custom-made plots of growth data; also allows for collation of multiple curves across different dataset files;
+3. Growth rate estimator - allows the user to compute growth rates of exponentially growing cells;
+4. Fluorescence analysis GUI - allows the user to normalise fluorescence data w.r.t. the OD, and, optionally, to subtract autofluorescence (provided that a control is included in the experiment).
 
 If you have very little coding experience or have never coded in Python before, follow the step by step instructions at the end of this page to set up everything needed for these GUIs.
 
@@ -22,7 +22,8 @@ Tested on: Python 3.11.9 on 64-bit Windows.
 
 
 # Data plotting GUI
-
+Similar to the above, it allows the user to explore plate reader data, and customise plots before saving to disk. The user can also upload multiple data files, but this feature is limited to "group analysis" (i.e., individual growth curves cannot be selected, the entire group will be plotted instead). <br>
+Please note that this GUI is still under development and has not yet been fully tested. Some features may not behave as expected. For known issues of this GUI, check out Issues. 
 
 # Growth rate estimator
 - allows user to inspect behaviour of growth rate over time and interact with fitting parameters such as window sizes
