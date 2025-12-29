@@ -23,7 +23,7 @@ Tested on: Python 3.11.9 on 64-bit Windows.
 
 # Data plotting GUI
 Similar to the above, it allows the user to explore plate reader data, and customise plots before saving to disk. The user can also upload multiple data files, but this feature is limited to "group analysis" (i.e., individual growth curves cannot be selected, the entire group will be plotted instead). <br>
-Please note that this GUI is still under development and has not yet been fully tested. Some features may not behave as expected. For known issues of this GUI, check out Issues. 
+Please note that this GUI is still under development and has not yet been fully tested. Some features may not behave as expected. For known issues of this GUI, see the Issues page.
 
 # Growth rate estimator
 - allows user to inspect behaviour of growth rate over time and interact with fitting parameters such as window sizes
