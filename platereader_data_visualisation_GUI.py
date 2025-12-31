@@ -322,6 +322,7 @@ def on_blanking_confirmation():
                 sns.lineplot(data = df_mod_cond, x = "time_h", y = "lnOD", hue = "well", ci=None, ax = ax)
                 ax.set_ylabel("ln(OD)")
                 sns.lineplot(data = df_mod_cond, x = "time_h", y = "OD", hue = "well", ax = ax_twin, alpha=0)
+                ax_twin.set_yscale('log')
                 ax_twin.set_ylabel('corresponding OD')
                 ax_twin.set_zorder(ax.get_zorder() - 1)
             else:
@@ -335,6 +336,7 @@ def on_blanking_confirmation():
                     sns.lineplot(data = df_mod_cond, x = "time_h", y = "lnOD", hue = "content", ci=None, ax = ax)
                 ax.set_ylabel("ln(OD)")
                 sns.lineplot(data = df_mod_cond, x = "time_h", y = "OD", hue = "well", ax = ax_twin, alpha=0)
+                ax_twin.set_yscale('log')
                 ax_twin.set_ylabel('corresponding OD')
                 ax_twin.set_zorder(ax.get_zorder() - 1) 
             else:
@@ -427,7 +429,11 @@ def on_blanking_confirmation():
                     r0 = ax.get_ylim()[1]     
                     l1 = l0 - y_change
                     r1 = r0 - y_change
-                    ax.set_ylim(l1,r1)   
+                    ax.set_ylim(l1,r1)
+                    if twin==True: # need to set new y axis limits on a log scale
+                        linear_l1 = np.exp(l1)
+                        linear_r1 = np.exp(r1)
+                        ax_twin.set_ylim(linear_l1, linear_r1)   
                     fig.canvas.draw_idle()
 
             #when release you have to stop moving
