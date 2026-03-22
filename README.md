@@ -32,7 +32,7 @@ Please note that this GUI is still under development and has not yet been fully 
 
 # Fluorescence analysis GUI
 
-<in progress>
+in progress...
 
 # Quick start guide for complete beginners to Python
 
