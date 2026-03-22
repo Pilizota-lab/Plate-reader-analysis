@@ -28,11 +28,11 @@ Please note that this GUI is still under development and has not yet been fully 
 # Growth rate estimator
 - allows user to inspect behaviour of growth rate over time and interact with fitting parameters such as window sizes
 - especially good for fast growing cells, where rolling window size has to be relatively small (due to only having a few kinetic points that are above the instrument detection limit, and before coming out of exponential phase).
-- also good at allowing users to select what is true exp phase rather than artefact/noise (add photo of noise before true flat region?)
+- also good at allowing users to select what is true exp phase rather than artefact/noise
 
 # Fluorescence analysis GUI
 
-
+<in progress>
 
 # Quick start guide for complete beginners to Python
 
