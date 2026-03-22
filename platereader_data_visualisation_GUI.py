@@ -1,5 +1,25 @@
 #%%
-#in this version, the user has the option to blank data; confirm selection button has been removed as it was obsolete
+
+# Contact: Diana Coroiu
+# Affiliation (at the time of writing): University of Edinburgh
+# Contact:
+#   - personal: didicoroiu@yahoo.com 
+#   - institutional: d.coroiu@sms.ed.ac.uk
+# Last updated: 12/2025
+
+# Description:
+
+# This code allows to interact with raw plate reader data
+# The raw data has to be in the .csv format and follow a given structure:
+# (1): table headings in row 8, data start in row 9
+# (2): time to be given in minutes (otherwise time scale will not make sense)
+# (3): axis 0 (rows) to contain different wells, axis 1 (columns) to contain different time points
+# (4): wells labelled as "A01" and not "A1"
+
+# Intended for academic use; feel free to adapt for other plate-reader data file formats.
+
+# Full instructions and details on GitHub: https://github.com/Pilizota-lab/Plate-reader-analysis/
+
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog as fd
@@ -14,7 +34,10 @@ import seaborn as sns
 path = fd.askopenfilename()
 #define dataframe
 data = pd.read_csv(path, skiprows = 7)
+# if csv file contains a comma after final value in each row (common), remove from df
+data.columns.astype(str).str.strip() != ""
 data_tr = data.transpose()
+print(data)
 time_pts = [float(i) for i in data.columns[2:]]
 time_hours = [time/60 for time in time_pts]
 wells = list(data_tr.iloc[0])
@@ -35,7 +58,7 @@ for wl in range(len(wells)):
         "OD": list(data_tr[wl])[2:],
         "lnOD": [np.log(a) for a in list(data_tr[wl])[2:]]
     })
-    df = df.append(to_add, ignore_index = True)
+    df = pd.concat([df, to_add], ignore_index=True)
 
 #def what happens after Yes or No are pressed (plotting code)
 def on_blanking_confirmation():
@@ -114,7 +137,13 @@ def on_blanking_confirmation():
     Button(tab1, text="deselect all", command=deselect_all).grid(row= 12, column = 0, sticky = W, pady = 4)
 
     def plot_wells():
+        if well_log.get()==1: # will need 2 y-axes (one for logged data, the other for linear data but logged scale)
+            twin = True
+        else:
+            twin = False
         fig, ax = plt.subplots()
+        if twin:
+            ax_twin = ax.twinx()
         cols = ["A","B", "C", "D", "E", "F", "G", "H"]
         df_mod_well = pd.DataFrame()
         for i in range(0, 8):
@@ -125,16 +154,21 @@ def on_blanking_confirmation():
                         well_name = str(cols[i])+str(0)+str(j+1)
                     else:
                         well_name = str(cols[i])+str(j+1)
-                    df_mod_well = df_mod_well.append(df.query("well==@well_name"), ignore_index = True)
-        #print(df_mod_well)
+                    df_mod_well = pd.concat([df_mod_well, df.query("well==@well_name")], ignore_index=True)
+
         for well in df_mod_well['well'].unique():
             data_subset = df_mod_well[df_mod_well['well'] == well]
             if well_log.get()==1:
                 ax.plot(data_subset['time_h'], data_subset['lnOD'], label=well)
+                # also plot linear OD data on a logged axis
+                ax_twin.plot(data_subset['time_h'], data_subset['OD'], alpha = 0) # not visible
+                ax_twin.set_yscale('log')
             else:
                 ax.plot(data_subset['time_h'], data_subset['OD'], label=well)
         if well_log.get()==1:
             ax.set_ylabel("lnOD")
+            ax_twin.set_ylabel('corresponding OD')
+            ax_twin.set_zorder(ax.get_zorder() - 1)  # push twin behind main; otherwise events will belong to this axis - important!
         else:
             ax.set_ylabel("optical density")
         ax.set_xlabel('Time (h)')
@@ -147,33 +181,35 @@ def on_blanking_confirmation():
 
         # Add interactive functionality
         def on_scroll(event):
-            #define zoom-in rate in each dimension
-            if event.button == 'up':
-                # Zoom in
-                k_x = 0.5
-                k_y = 0.5
-                xdata, ydata = event.xdata, event.ydata #coordinates of the mouse cursor where the event occured
-                #x axis zoomin
-                #old coordinates
-                l0 = ax.get_xlim()[0]
+            # set scroll gains (zoom in/out rates)
+            # if gain>1 => zoom out; if gain<1 => zoom in
+            k_x = 2
+            k_y = 2
+            if event.button == 'up': # Zoom in
+                xdata, ydata = event.xdata, event.ydata #coordinates of the mouse cursor where the event occured - expand plot around location of mouse cursor
+                #for x axis (zoomin)
+                l0 = ax.get_xlim()[0] # getting old coords
                 r0 = ax.get_xlim()[1]
-                l1 = xdata - k_x*xdata + k_x*l0
-                r1 = xdata - k_x*xdata + k_x*r0
+                l1 = xdata - (1/k_x)*xdata + (1/k_x)*l0  # compute new coords according to scroll gain set above
+                r1 = xdata - (1/k_x)*xdata + (1/k_x)*r0
                 ax.set_xlim(l1,r1)
-                #y axis zoomin
+                #for y axis (zoomin)
                 l0 = ax.get_ylim()[0]
                 r0 = ax.get_ylim()[1]
-                l1 = ydata - k_y*ydata + k_y*l0
-                r1 = ydata - k_y*ydata + k_y*r0
+                l1 = ydata - (1/k_y)*ydata + (1/k_y)*l0
+                r1 = ydata - (1/k_y)*ydata + (1/k_y)*r0
                 ax.set_ylim(l1,r1)
-                
+                if twin == True: # need to set new y axis limits on a log scale
+                    linear_l1 = np.exp(l1) #e^(l1) of originally computed l1 for y-axis
+                    linear_r1 = np.exp(r1)
+                    ax_twin.set_ylim(linear_l1, linear_r1)
 
+                
+            #define zoom-out rate as above
             elif event.button == 'down':
                 # Zoom out
-                k_x = 2
-                k_y = 2
                 xdata, ydata = event.xdata, event.ydata
-                #old coordinates
+                # get old coordinates
                 l0 = ax.get_xlim()[0]
                 r0 = ax.get_xlim()[1]
                 l1 = xdata - k_x*xdata + k_x*l0
@@ -185,6 +221,10 @@ def on_blanking_confirmation():
                 l1 = ydata - k_y*ydata + k_y*l0
                 r1 = ydata - k_y*ydata + k_y*r0
                 ax.set_ylim(l1,r1)
+                if twin==True: # need to set new y axis limits on a log scale
+                    linear_l1 = np.exp(l1)
+                    linear_r1 = np.exp(r1)
+                    ax_twin.set_ylim(linear_l1, linear_r1)
             fig.canvas.draw_idle()
 
         fig.canvas.mpl_connect('scroll_event', on_scroll)
@@ -218,7 +258,11 @@ def on_blanking_confirmation():
                     r0 = ax.get_ylim()[1]     
                     l1 = l0 - y_change
                     r1 = r0 - y_change
-                    ax.set_ylim(l1,r1)   
+                    ax.set_ylim(l1,r1)
+                    if twin==True: # need to set new y axis limits on a log scale
+                        linear_l1 = np.exp(l1)
+                        linear_r1 = np.exp(r1)
+                        ax_twin.set_ylim(linear_l1, linear_r1)   
                     fig.canvas.draw_idle()
 
             #when release you have to stop moving
@@ -257,21 +301,32 @@ def on_blanking_confirmation():
 
     def plot_contents():
         fig, ax = plt.subplots()
+        if cond_log.get()==1:
+            twin = True
+        else:
+            twin = False
+        if twin:
+            ax_twin = ax.twinx()
         conditions = list(df["content"].unique())
         df_mod_cond = pd.DataFrame()
 
-        for i in range(len(conditions)):
+        for i in range(len(conditions)): # get data that needs plotting
             if to_plot[i].get() == 1:
                 #get name of the condition
                 cond = conditions[i]
-                df_mod_cond = df_mod_cond.append(df.query("content==@cond"), ignore_index = True)
+                df_mod_cond = pd.concat([df_mod_cond, df.query("content==@cond")], ignore_index=True)
 
         if indiv.get()==1:
             #plot individual lines, not the average
             if cond_log.get()==1:
-                sns.lineplot(data = df_mod_cond, x = "time_h", y = "lnOD", hue = "well", ci=95, ax = ax)
+                sns.lineplot(data = df_mod_cond, x = "time_h", y = "lnOD", hue = "well", ci=None, ax = ax)
+                ax.set_ylabel("ln(OD)")
+                sns.lineplot(data = df_mod_cond, x = "time_h", y = "OD", hue = "well", ax = ax_twin, alpha=0)
+                ax_twin.set_yscale('log')
+                ax_twin.set_ylabel('corresponding OD')
+                ax_twin.set_zorder(ax.get_zorder() - 1)
             else:
-                sns.lineplot(data = df_mod_cond, x = "time_h", y = "OD", hue = "well", ci=95, ax = ax)
+                sns.lineplot(data = df_mod_cond, x = "time_h", y = "OD", hue = "well", ci=None, ax = ax)
             
         else:
             if cond_log.get()==1:
@@ -280,6 +335,10 @@ def on_blanking_confirmation():
                 else:
                     sns.lineplot(data = df_mod_cond, x = "time_h", y = "lnOD", hue = "content", ci=None, ax = ax)
                 ax.set_ylabel("ln(OD)")
+                sns.lineplot(data = df_mod_cond, x = "time_h", y = "OD", hue = "well", ax = ax_twin, alpha=0)
+                ax_twin.set_yscale('log')
+                ax_twin.set_ylabel('corresponding OD')
+                ax_twin.set_zorder(ax.get_zorder() - 1) 
             else:
                 if ci_95.get()==1:
                     sns.lineplot(data = df_mod_cond, x = "time_h", y = "OD", hue = "content", ci=95, ax=ax)
@@ -288,39 +347,41 @@ def on_blanking_confirmation():
                 ax.set_ylabel("optical density")  
         ax.set_xlabel("time (h)")
         ax.set_aspect("auto")
-        ax.autoscale(enable=True)
+        # ax.autoscale(enable=True)
         ax.margins(x=0)
         ax.set_title("Growth curves in different conditions")
 
         # Add interactive functionality
         def on_scroll(event):
-            #define zoom-in rate in each dimension
-            if event.button == 'up':
-                # Zoom in
-                k_x = 0.5
-                k_y = 0.5
-                xdata, ydata = event.xdata, event.ydata #coordinates of the mouse cursor where the event occured
-                #x axis zoomin
-                #old coordinates
-                l0 = ax.get_xlim()[0]
+            # set scroll gains (zoom in/out rates)
+            # if gain>1 => zoom out; if gain<1 => zoom in
+            k_x = 2
+            k_y = 2
+            if event.button == 'up': # Zoom in
+                xdata, ydata = event.xdata, event.ydata #coordinates of the mouse cursor where the event occured - expand plot around location of mouse cursor
+                #for x axis (zoomin)
+                l0 = ax.get_xlim()[0] # getting old coords
                 r0 = ax.get_xlim()[1]
-                l1 = xdata - k_x*xdata + k_x*l0
-                r1 = xdata - k_x*xdata + k_x*r0
+                l1 = xdata - (1/k_x)*xdata + (1/k_x)*l0  # compute new coords according to scroll gain set above
+                r1 = xdata - (1/k_x)*xdata + (1/k_x)*r0
                 ax.set_xlim(l1,r1)
-                #y axis zoomin
+                #for y axis (zoomin)
                 l0 = ax.get_ylim()[0]
                 r0 = ax.get_ylim()[1]
-                l1 = ydata - k_y*ydata + k_y*l0
-                r1 = ydata - k_y*ydata + k_y*r0
+                l1 = ydata - (1/k_y)*ydata + (1/k_y)*l0
+                r1 = ydata - (1/k_y)*ydata + (1/k_y)*r0
                 ax.set_ylim(l1,r1)
-                
+                if twin == True: # need to set new y axis limits on a log scale
+                    linear_l1 = np.exp(l1) #e^(l1) of originally computed l1 for y-axis
+                    linear_r1 = np.exp(r1)
+                    ax_twin.set_ylim(linear_l1, linear_r1)
 
+                
+            #define zoom-out rate as above
             elif event.button == 'down':
                 # Zoom out
-                k_x = 2
-                k_y = 2
                 xdata, ydata = event.xdata, event.ydata
-                #old coordinates
+                # get old coordinates
                 l0 = ax.get_xlim()[0]
                 r0 = ax.get_xlim()[1]
                 l1 = xdata - k_x*xdata + k_x*l0
@@ -332,6 +393,10 @@ def on_blanking_confirmation():
                 l1 = ydata - k_y*ydata + k_y*l0
                 r1 = ydata - k_y*ydata + k_y*r0
                 ax.set_ylim(l1,r1)
+                if twin==True: # need to set new y axis limits on a log scale
+                    linear_l1 = np.exp(l1)
+                    linear_r1 = np.exp(r1)
+                    ax_twin.set_ylim(linear_l1, linear_r1)
             fig.canvas.draw_idle()
 
         fig.canvas.mpl_connect('scroll_event', on_scroll)
@@ -364,7 +429,11 @@ def on_blanking_confirmation():
                     r0 = ax.get_ylim()[1]     
                     l1 = l0 - y_change
                     r1 = r0 - y_change
-                    ax.set_ylim(l1,r1)   
+                    ax.set_ylim(l1,r1)
+                    if twin==True: # need to set new y axis limits on a log scale
+                        linear_l1 = np.exp(l1)
+                        linear_r1 = np.exp(r1)
+                        ax_twin.set_ylim(linear_l1, linear_r1)   
                     fig.canvas.draw_idle()
 
             #when release you have to stop moving
@@ -455,7 +524,7 @@ def blanking_needed():
         well = wells[wl]
         #calculate average of points used for blanking
         df_with_blanks = df.query("well == @well and time_h>@xmin and time_h<@xmax")
-        blank = np.average(df_with_blanks["OD"].to_list())
+        blank = round(np.average(df_with_blanks["OD"].to_list()), 3)
         df_to_blank_data = df.query("well == @well")
         list_ods = df_to_blank_data["OD"].to_list()
         list_ods_blanked = [a-blank for a in list_ods]
@@ -474,7 +543,7 @@ def blanking_needed():
             "OD": list_ods_blanked,
             "lnOD": list_ods_blanked_ln
         })
-        df_blanked = df_blanked.append(to_add, ignore_index = True)
+        df_blanked = pd.concat([df_blanked, to_add], ignore_index=True)
     df_blanked #this is cointains the blank data to work with from now on
     df = df_blanked
     on_blanking_confirmation()
