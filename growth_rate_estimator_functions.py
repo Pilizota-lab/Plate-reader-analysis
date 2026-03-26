@@ -15,7 +15,6 @@ from tkinter import filedialog as fd
 from matplotlib.widgets import Button as MplButton
 
 
-
 # 1. PROCESSING FUNCTIONS     (filters, smoothing, regression and computation of growth rate/lag time)
 
 # Hampel filter -> get rid of outliters (removing them entirely)
@@ -42,15 +41,9 @@ def hampel_filter(timepts, data, window_size, n_sigmas):
 # Smoothing (w/ Hanning window)
 def hanning_smoothing(data, window_size):
     # data to be input as list or values
-    # window size should be >=1 and odd
-    if window_size>1:
-        if window_size % 2 != 0:
-            window_size += 1  #ensure window size is odd
-        window = np.hanning(window_size)   #create weights for window
-        smooth_data = np.convolve(data, window, mode='same')/sum(window)
-        return smooth_data
-    else: # window size not a valid number (not an natural non-0 number)
-        return data
+    window = np.hanning(window_size)   #create weights for window
+    smooth_data = np.convolve(data, window, mode='same')/sum(window)
+    return smooth_data
 
 # Linear regression (using ordinary least squares)
 def get_linear_fit(x, y):
@@ -77,8 +70,7 @@ def calculate_growth_parameters(times, ln_optical_densities, time_above_lod, od_
     try:
         od_0 = live_params['OD_frozen_stock']
         dilution_factor = live_params['dilution_of_frozen_stock']
-        path_correction = live_params['path_length_correction']
-        lag_time = time_above_lod - (1/global_rate)*np.log(od_above_lod*dilution_factor/(path_correction*od_0))
+        lag_time = time_above_lod - (1/global_rate)*np.log(od_above_lod*dilution_factor/(od_0))
     except:
         print("Parameters required to calculate the lag have not been given. Setting to NaN.")
         lag_time = np.nan
@@ -102,7 +94,8 @@ def empty_result(well, df): # help clear data that user does not want to save
 
 # 2. INTERACTIVE FUNCTIONS
 
-def load_data():
+
+def load_data(pathlength_correction):
     #get path interactively here
     path = fd.askopenfilename() # user selects file from file explorer GUI
     data = pd.read_csv(path, skiprows = 7).dropna()
@@ -127,14 +120,14 @@ def load_data():
             "well": well_list,
             "time": time_pts,
             "time_h": time_hours,
-            "OD": list(data_tr[wl])[2:],
-            "lnOD": [np.log(a) for a in list(data_tr[wl])[2:]]
+            "OD": [a/pathlength_correction for a in list(data_tr[wl])[2:]],
+            "lnOD": [np.log(a/pathlength_correction) for a in list(data_tr[wl])[2:]]
         })
         df = pd.concat([df, to_add], ignore_index=True)
     return(df, path) # raw data
 
 def interactive_blanking(df):
-    master = Tk()
+    master = Toplevel()
     master.title("Select region which you want to use as blank")
     fig, ax = plt.subplots()
     for well in df["well"].unique():
@@ -189,7 +182,6 @@ def interactive_blanking(df):
 
     def confirmation():
         plt.close()
-        master.quit()
         master.destroy()
         return()
             
@@ -201,7 +193,7 @@ def interactive_blanking(df):
     Button(master, text="confirm selection", command = confirmation).grid(row = 1)
     
     plt.show(block=False) 
-    master.mainloop()
+    master.wait_window()
     xmin = bounds['xmin']
     xmax = bounds['xmax']
 
@@ -242,7 +234,7 @@ def create_parameter_window(live_params, default_params):
     Once confirmed, all parameters will be carried over to the next curve, unless reset.
     """
 
-    win = Tk()
+    win = Toplevel()
     win.title("Processing parameters")
 
     variables = {k: StringVar(value=str(v)) for k, v in live_params.items()} # create a dictionary to be linked to the tkinter window
@@ -264,7 +256,6 @@ def create_parameter_window(live_params, default_params):
     row(7, "Smoothing (window size)", "smoothing_window")
     row(8, "Frozen stock OD", "OD_frozen_stock")
     row(9, "Frozen stock dilution", "dilution_of_frozen_stock")
-    row(10,"Path length correction factor", "path_length_correction")
 
     def do_apply():
         # update global params from the entries (minimal validation)
@@ -279,15 +270,20 @@ def create_parameter_window(live_params, default_params):
             if ow % 2 == 0:
                 ow += 1
             live_params["outlier_window"]  = ow
-            live_params["smoothing_window"] = max(1, int(variables["smoothing_window"].get()))
+            variables["outlier_window"].set(ow)
+            sw = max(1, int(variables["smoothing_window"].get()))
+            if sw % 2 == 0:
+                sw += 1
+            live_params["smoothing_window"] = sw
+            variables["smoothing_window"].set(sw)
+
         except ValueError:
-            print("Invalid parameter, please enter numbers.")
+            print("Invalid parameters, please enter numbers.")
             return
 
         try: # culture setup parameters are optional, but if not given, lag time will be NaN
             live_params["OD_frozen_stock"]        = float(variables["OD_frozen_stock"].get())
             live_params["dilution_of_frozen_stock"]        = float(variables["dilution_of_frozen_stock"].get())
-            live_params["path_length_correction"]      = float(variables["path_length_correction"].get())
         except ValueError:
             print("Lag time cannot be computed with current parameters.")
 
@@ -340,6 +336,7 @@ def on_point_click(event, state, ax1, ax2, well, df, live_params, selection_buff
     # buffer to hold current selections
     if len(selection_buffer) >= 2:
         selection_buffer.clear() # empty buffer
+        # TODO: remove and replot everything from ax1 to avoid having too many plots overlaid - weird behaviour after too many recomputes
         ax1.scatter(state['time_series_filtered_sliced'], state['lnOD_data_filtered_sliced'], s=10, color='tab:blue', label='Exponential phase') # get rid of highlighted points in previous selection
 
     selection_buffer.append(closest_point_id) #IDs of exp bounds in the time_series_for_growth_rates
@@ -366,7 +363,8 @@ def on_point_click(event, state, ax1, ax2, well, df, live_params, selection_buff
         selections_to_save[well] = {
             'well':                 well,
             'sample':               df.loc[df['well']==well, 'content'].tolist()[0], # returns a string
-            'exponential_points_bounds': (exponential_times[0], exponential_times[-1]), # contains time point bounds for selected exponential
+            'exponential_points_bounds': (df.loc[df['time_h']==exponential_times[0], 'time'].tolist()[0], df.loc[df['time_h']==exponential_times[-1], 'time'].tolist()[0]), # contains time points in mins, as given in raw data (so that exp can be reconstructed easily)
+            # 'exponential_points_bounds': (exponential_times[0], exponential_times[-1]), # contains time (h) point bounds for selected exponential
             'growth_rate_1/h':      global_rate if global_rate is not None else np.nan,
             'growth_rate_error':    rate_err if rate_err is not None else np.nan,
             'doubling_time_min':    np.log(2) / global_rate * 60 if (global_rate and global_rate > 0) else np.nan,
@@ -376,7 +374,6 @@ def on_point_click(event, state, ax1, ax2, well, df, live_params, selection_buff
             'hampel_window':        live_params['outlier_window'],
             'hampel_sigmas':        live_params['outlier_sigmas']
         }
-
     # redraw RHS plot to update with newly selected point
     ax2.clear()
     ax2.errorbar(time_series_for_growth_rates, growth_rates, yerr=state['growth_rate_cis'], picker=5, fmt='o', linestyle=None, capsize=5, label='Instantaneous growth rates', alpha=0.6)
@@ -538,7 +535,7 @@ def process_well_interactive(well, df, live_params, selections_to_save, selectio
         # create empty twin plot such that actual OD values are shown on the on RHS of the LHS plot
         twinax = axs[0].twinx()
         ylims = axs[0].get_ylim(); twinax.set_ylim(np.exp(ylims))
-        twinax.set_ylabel("OD"); #twinax.set_yscale('log')
+        twinax.set_ylabel("OD"); twinax.set_yscale('log')
 
         # RHS plot
         tps_to_plot = time_series_filtered_sliced[running_window//2 : (len(time_series_filtered_sliced) - (running_window+1)//2 + 1)] #center around middle time point in each window
