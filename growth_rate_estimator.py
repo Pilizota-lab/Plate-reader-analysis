@@ -5,7 +5,10 @@
 # Contact:
 #   - personal: didicoroiu@yahoo.com 
 #   - institutional: d.coroiu@sms.ed.ac.uk
-# Last updated: 03/2026
+# Last updated: 26.03.2026
+
+## Acknowledgements
+# This GUI was initially based on an early draft written by James Broughton. 
 
 # Description:
 
@@ -50,8 +53,8 @@ from growth_rate_estimator_functions import * # custom functions - ensure functi
 # default parameters -> not modified by user so that one can always reset to defaults
 default_params = {
     # OD boundaries
-    "od_lower": 0.005,
-    "od_upper": 0.6,
+    "od_lower": 0.05,
+    "od_upper": 1.5,
     # time point boundaries if experiment ran for too long (in hours)
     "time_lower": 0,
     "time_upper": 35,
@@ -73,23 +76,52 @@ recompute_hook = None
 
 ### START PROGRAM ###
 
-df, path = load_data()
+root = Tk()
+root.withdraw()
+
+# ask for path length correction value
+correction_window = Toplevel()
+
+ttk.Label(correction_window, text='Please provide the path length correction').pack()
+entry = ttk.Entry(correction_window)
+entry.pack()
+
+error_label = ttk.Label(correction_window, text='')
+error_label.pack()
+pathlength_correction = None
+
+def get_pathlength_correction():
+    global pathlength_correction
+    try:
+        pathlength_correction = float(entry.get())
+        if pathlength_correction>0 and pathlength_correction<=1: # set to 1 if user wants to stick to reader scale
+            print(f'path length correction confirmed: {pathlength_correction}')
+            correction_window.destroy()
+        else:
+            ttk.Label(correction_window, text='Please select a value between 0 and 1.').pack()
+    except:
+        ttk.Label(correction_window, text='Please enter a number.').pack()
+
+ttk.Button(correction_window, text="Confirm", command = get_pathlength_correction).pack()
+correction_window.wait_window()
+
+
+df, path = load_data(pathlength_correction)
 
 # BLANK
-initial_window = Tk()
+initial_window = Toplevel()
 initial_window.geometry("350x100")
 initial_window.title("Would you like to blank your data?")
+
 
 def yes_blank():
     global df
     df = interactive_blanking(df) # overwrite raw data
-    initial_window.quit()
     initial_window.destroy()
     return
 
 def no_blank():
     messagebox.showwarning("Warning", "Your data has not been blanked.")
-    initial_window.quit()
     initial_window.destroy()
     return
 
@@ -98,7 +130,7 @@ yes_button.place(x=100, y=40)
 no_button = Button(initial_window, text ="No", command = no_blank)
 no_button.place(x=200, y=40)
 initial_window.protocol("WM_DELETE_WINDOW", no_blank)
-initial_window.mainloop()
+initial_window.wait_window()
 
 # containers for results
 selections_to_save = {}  # stores selection-related vars for each well: {'time': (t1,t2), 'growth_rate': float, 'indices': (i1,i2)}
@@ -156,20 +188,24 @@ print(summary_per_conc)
 
 # save results to CSV (same path/file name + growth_rates at the end) - if user wants to do so
 parameter_window.destroy()
-saving_popup = Tk()
+saving_popup = Toplevel()
 saving_popup.title('Do you want to write results to disk?')
 def save_results():
     results_df.to_csv((path[:-4] + '_growth_rates.csv'), index=False)
     saving_popup.destroy()
     print('data saved to disk next to the raw data.')
-    return()
+    root.quit()
 
 def move_on():
     saving_popup.destroy()
+    root.quit()
 
 Button(saving_popup, text='Save', command = save_results).grid(row=1, column=1)
 Button(saving_popup, text='Forget', command=move_on).grid(row=1, column=2)
 
 saving_popup.protocol("WM_DELETE_WINDOW", move_on) #if user closes window instead
-saving_popup.mainloop()
 
+root.mainloop()
+
+import os
+os._exit(0)
