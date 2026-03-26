@@ -5,7 +5,7 @@
 # Contact:
 #   - personal: didicoroiu@yahoo.com 
 #   - institutional: d.coroiu@sms.ed.ac.uk
-# Last updated: 12/2025
+# Last updated: 26.03.2026
 
 # Description:
 
@@ -23,6 +23,7 @@
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog as fd
+import tkinter as tk
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -31,7 +32,36 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+root = Tk()
+root.withdraw()  # hide it immediately
 path = fd.askopenfilename()
+
+# ask for path length correction value
+correction_window = Toplevel()
+
+ttk.Label(correction_window, text='Please provide the path length correction').pack()
+entry = ttk.Entry(correction_window)
+entry.pack()
+
+error_label = ttk.Label(correction_window, text='')
+error_label.pack()
+pathlength_correction = None
+
+def get_pathlength_correction():
+    global pathlength_correction
+    try:
+        pathlength_correction = float(entry.get())
+        if pathlength_correction>0 and pathlength_correction<=1: # set to 1 if user wants to stick to reader scale
+            print(f'path length correction confirmed: {pathlength_correction}')
+            correction_window.destroy()
+        else:
+            ttk.Label(correction_window, text='Please select a value between 0 and 1.').pack()
+    except:
+        ttk.Label(correction_window, text='Please enter a number.').pack()
+
+ttk.Button(correction_window, text="Confirm", command = get_pathlength_correction).pack()
+correction_window.wait_window()
+
 #define dataframe
 data = pd.read_csv(path, skiprows = 7)
 # if csv file contains a comma after final value in each row (common), remove from df
@@ -55,21 +85,23 @@ for wl in range(len(wells)):
         "well": well_list,
         "time": time_pts,
         "time_h": time_hours,
-        "OD": list(data_tr[wl])[2:],
-        "lnOD": [np.log(a) for a in list(data_tr[wl])[2:]]
+        "OD": [a/pathlength_correction for a in list(data_tr[wl])[2:]],
+        "lnOD": [np.log(a/pathlength_correction) for a in list(data_tr[wl])[2:]]
     })
     df = pd.concat([df, to_add], ignore_index=True)
+
+
 
 #def what happens after Yes or No are pressed (plotting code)
 def on_blanking_confirmation():
     #this function will be called when the blanking window is closed
     #first destoy old window
-    initial_window.quit()
     initial_window.destroy()
 
     #create new window with plotting options
-    master = Tk() #creates parent window (root)
+    master = Toplevel() #creates parent window (root)
     master.title("Plate reader analysis GUI")
+    master.protocol("WM_DELETE_WINDOW", root.quit)
     tabControl = ttk.Notebook(master)
     tab1 = ttk.Frame(tabControl) #create tab and put in tab control
     tabControl.add(tab1, text = "well analysis")
@@ -455,9 +487,8 @@ def on_blanking_confirmation():
 
     Button(tab1, text='Plot', command=plot_wells).grid(row=13, sticky=W, pady=4)
     Button(tab2, text='Plot', command=plot_contents).grid(row=6, column = 5, sticky=W, pady=4)
-    master.mainloop()
 
-#define Yes and No buttons for blanking
+#define what happens in each case, when user selecting Yes/No when asked for blanking. 
 def blanking_needed():
     global df
     fig, ax = plt.subplots()
@@ -547,13 +578,11 @@ def blanking_needed():
     df_blanked #this is cointains the blank data to work with from now on
     df = df_blanked
     on_blanking_confirmation()
-    initial_window.mainloop()
 
 def skip_blanking():
     on_blanking_confirmation()
-    initial_window.mainloop()
     
-initial_window = Tk()
+initial_window = Toplevel()
 initial_window.geometry("350x100")
 initial_window.title("Would you like to blank the data?")
 yes_button = Button(initial_window, text="Yes", command = blanking_needed)
@@ -561,7 +590,7 @@ yes_button.place(x=100, y=40)
 no_button = Button(initial_window, text ="No", command = skip_blanking)
 no_button.place(x=200, y=40)
 
-mainloop() #this creates a loop of events that runs indefinitely until the application is closed 
+root.mainloop() #this creates a loop of events that runs indefinitely until the application is closed 
 
 #need to kill kernel at the end, can't run this interface a second time in the same kernel as it enters some sort of infinite loop
 import os
