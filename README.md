@@ -39,6 +39,11 @@ To run:
 ```bash
 python growth_rate_estimator.py
 ```
+
+Outputs:
+- a results file containing, for every well: the global growth rate and its uncertainty (standard error of the slope), the time-point bounds of the chosen exponential interval, the filter and smoothing parameters used, and (for the exponential interval only), the timepoints and ODs, plus the "instantaneous" growth rates (computed with a running window), their time points, and their 95% confidence intervals
+- a folder containing the lnOD vs time and growth rate vs time plots
+
 # Fluorescence calculator
 Allows users to compute OD-normalised fluorescence from paired fluorescence and OD reads. Users can load fluorescence and OD datasets, inspect the data, and select the region of interest based on which mean fluorescence will be calculated. 
 
