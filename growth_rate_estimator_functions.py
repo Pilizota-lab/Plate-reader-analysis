@@ -13,6 +13,7 @@ from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog as fd
 from matplotlib.widgets import Button as MplButton
+import os
 
 
 # 1. PROCESSING FUNCTIONS     (filters, smoothing, regression and computation of growth rate/lag time)
@@ -89,6 +90,11 @@ def empty_result(well, df): # help clear data that user does not want to save
         'hanning_window':            np.nan,
         'hampel_window':             np.nan,
         'hampel_sigmas':             np.nan,
+        'exponential_times':         np.nan,
+        'exponential_ODs':           np.nan,
+        'exp_growth_rate_times':     np.nan,
+        'exponential_growth_rates':  np.nan,
+        'exponential_growth_rates_cis': np.nan,
     }
 
 
@@ -223,6 +229,7 @@ def interactive_blanking(df):
             "lnOD": list_ods_blanked_ln
         })
         df_blanked = pd.concat([df_blanked, to_add], ignore_index = True)
+    print(df_blanked)
     return df_blanked # contains blank data
 
 
@@ -331,10 +338,10 @@ def on_point_click(event, state, ax1, ax2, well, df, live_params, selection_buff
     # compute distances from user click to each point and find the closest one
     distances = np.sqrt((time_series_valid - x_click)**2 + (growth_rates_valid - y_click)**2)
     closest_point_id_valid = np.argmin(distances) # this is the ID in the valid series only
-    closest_point_id = np.where(~nan_mask)[0][closest_point_id_valid] # point in the real array
+    closest_point_id = np.where(~nan_mask)[0][closest_point_id_valid] # point in the real array of growth rates
     
     # buffer to hold current selections
-    if len(selection_buffer) >= 2:
+    if len(selection_buffer) >= 2: # reset and replot
         selection_buffer.clear() # empty buffer
         # TODO: remove and replot everything from ax1 to avoid having too many plots overlaid - weird behaviour after too many recomputes
         ax1.scatter(state['time_series_filtered_sliced'], state['lnOD_data_filtered_sliced'], s=10, color='tab:blue', label='Exponential phase') # get rid of highlighted points in previous selection
@@ -345,7 +352,7 @@ def on_point_click(event, state, ax1, ax2, well, df, live_params, selection_buff
         # get exp bounds in time_series and lnOD_data
         rw = live_params['running_window']
         # real_indices = (min(selection_buffer)-rw//2, max(selection_buffer)+rw//2 -1) - this is wrong, they're the indices
-        real_indices = (min(selection_buffer), max(selection_buffer)+rw-1)
+        real_indices = (min(selection_buffer), max(selection_buffer)+rw) # corresponding to LHS points
         exponential_times = state['time_series_filtered_sliced'][real_indices[0]:real_indices[1]]
         exponential_lnODs = state['lnOD_data_filtered_sliced'][real_indices[0]:real_indices[1]]
 
@@ -372,7 +379,12 @@ def on_point_click(event, state, ax1, ax2, well, df, live_params, selection_buff
             'running_window':       live_params['running_window'],
             'hanning_window':       live_params['smoothing_window'],
             'hampel_window':        live_params['outlier_window'],
-            'hampel_sigmas':        live_params['outlier_sigmas']
+            'hampel_sigmas':        live_params['outlier_sigmas'],
+            'exponential_times':    exponential_times,
+            'exponential_ODs':      [np.exp(a) for a in exponential_lnODs],
+            'exp_growth_rate_times':    time_series_for_growth_rates[min(selection_buffer): max(selection_buffer) + 1],
+            'exponential_growth_rates': growth_rates[min(selection_buffer): max(selection_buffer) + 1],
+            'exponential_growth_rates_cis': state['growth_rate_cis'][min(selection_buffer): max(selection_buffer) + 1],
         }
     # redraw RHS plot to update with newly selected point
     ax2.clear()
@@ -412,21 +424,30 @@ def on_point_click(event, state, ax1, ax2, well, df, live_params, selection_buff
                
 # Button handlers for user decision before moving on to next well
 
-def on_keep_click(event, fig, well, df, selections_to_save, selection_buffer):
+def on_keep_click(event, fig, well, df, selections_to_save, selection_buffer, path_to_save):
+    # get experiment date from path name (as a form of experiment ID)
+    expt_id = os.path.basename(path_to_save).split("_")[0]
+    os.makedirs(os.path.join(path_to_save, "saved plots"), exist_ok = True)
     if len(selection_buffer) < 2:
         print(f"No selection made for well {well}. Saving as NaN.")
         selections_to_save[well] = empty_result(well, df)
         selection_buffer.clear()
+        plt.savefig(os.path.join(path_to_save, f"saved plots", f"well {well}_({df.loc[df['well']==well, 'content'].tolist()[0]})_{expt_id}_discarded.jpg"))
     else:
         print(f"Confirmed selection for well {well}.")
+        plt.savefig(os.path.join(path_to_save, f"saved plots", f"well {well}_({df.loc[df['well']==well, 'content'].tolist()[0]})_{expt_id}.jpg"))
+
     global proceed_flag
     proceed_flag = True
     plt.close(fig)
 
-def on_skip_click(event, fig, well, df, selections_to_save, selection_buffer):
+def on_skip_click(event, fig, well, df, selections_to_save, selection_buffer, path_to_save):
     print(f"Skipping well {well}.")
     selections_to_save[well] = empty_result(well, df)
     selection_buffer.clear()
+    expt_id = os.path.basename(path_to_save).split("_")[0]
+    os.makedirs(os.path.join(path_to_save, "saved plots"), exist_ok = True)
+    plt.savefig(os.path.join(path_to_save, f"saved plots", f"well {well}_({df.loc[df['well']==well, 'content'].tolist()[0]})_{expt_id}_discarded.jpg"))
     global proceed_flag
     proceed_flag = True
     plt.close(fig)
@@ -444,7 +465,7 @@ def on_exit_click(event, fig, well, df, selections_to_save, selection_buffer, ex
 
 
 # Define function that will take the data for current well and allow user to interact with it and get the growth rate
-def process_well_interactive(well, df, live_params, selections_to_save, selection_buffer, exit_requested):
+def process_well_interactive(well, df, live_params, selections_to_save, selection_buffer, exit_requested, path_to_save):
     
     """
     For current well, it will do the following, each time it gets "recomputed" (due to a new set of processing parameters being applied by user):
@@ -579,8 +600,8 @@ def process_well_interactive(well, df, live_params, selections_to_save, selectio
 
     global proceed_flag
     proceed_flag = False
-    confirm_button.on_clicked(lambda event: on_keep_click(event, fig, well, df, selections_to_save, selection_buffer))
-    discard_button.on_clicked(lambda event: on_skip_click(event, fig, well, df, selections_to_save, selection_buffer))
+    confirm_button.on_clicked(lambda event: on_keep_click(event, fig, well, df, selections_to_save, selection_buffer, path_to_save))
+    discard_button.on_clicked(lambda event: on_skip_click(event, fig, well, df, selections_to_save, selection_buffer, path_to_save))
     exit_button.on_clicked(lambda event: on_exit_click(event, fig, well, df, selections_to_save, selection_buffer, exit_requested))
 
     plt.show(block=True)
